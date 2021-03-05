@@ -38,7 +38,30 @@ class Encoder(EncoderBase):
         #   self.hidden_state_size, self.num_hidden_layers.
         # 3. cell_type will be one of: ['lstm', 'gru', 'rnn']
         # 4. Relevant pytorch modules: torch.nn.{LSTM, GRU, RNN, Embedding}
-        assert False, "Fill me"
+        if self.cell_type == "lstm":
+            self.rnn = torch.nn.LSTM(self.source_vocab_size,
+                                     self.hidden_state_size,
+                                     num_layers=self.num_hidden_layers,
+                                     dropout=self.dropout,
+                                     bidirectional=True)
+        elif self.cell_type == "gru":
+            self.rnn = torch.nn.GRU(self.source_vocab_size,
+                                    self.hidden_state_size,
+                                    num_layers=self.num_hidden_layers,
+                                    dropout=self.dropout,
+                                    bidirectional=True)
+        elif self.cell_type == "rnn":
+            self.rnn = torch.nn.RNN(self.source_vocab_size,
+                                    self.hidden_state_size,
+                                    num_layers=self.num_hidden_layers,
+                                    dropout=self.dropout,
+                                    bidirectional=True)
+        else:
+            raise NameError("cell_type not defined")
+
+        self.embedding = torch.nn.Embedding(self.source_vocab_size,
+                                            self.word_embedding_size,
+                                            padding_idx=self.pad_id)
 
     def forward_pass(self, F, F_lens, h_pad=0.):
         # Recall:
@@ -57,9 +80,39 @@ class Encoder(EncoderBase):
         # Recall:
         #   F is size (S, M)
         #   x (output) is size (S, M, I)
-        assert False, "Fill me"
+        x = self.embedding(F)
+
+        return x
 
     def get_all_hidden_states(self, x, F_lens, h_pad):
+        """Get all encoder hidden states for from input sequences
+
+        Parameters
+        ----------
+        x : torch.FloatTensor
+            A float tensor of shape ``(S, M, I)`` of input to the encoder RNN,
+            where ``S`` is the number of source time steps, ``M`` is the batch
+            dimension, and ``I`` corresponds to the size of the per-word input
+            vector. ``x[s, m, :]`` is the input vector for the ``s``-th word in
+            the ``m``-th source sequence in the batch. `x` has been padded such
+            that ``x[F_lens[m]:, m, :] == 0.`` for all ``m``.
+        F_lens : torch.LongTensor
+            An integer tensor of shape ``(M,)`` that stores the original
+            lengths of each source sequence (and input sequence) in the batch
+            before right-padding.
+        h_pad : float
+            The value to right-pad `h` with, wherever `x` is right-padded.
+
+        Returns
+        -------
+        h : torch.FloatTensor
+            A float tensor of shape ``(S, M, 2 * self.hidden_state_size)``
+            where ``h[s,m,i]`` refers to the ``i``-th index of the encoder
+            RNN's last layer's hidden state at time step ``s`` of the
+            ``m``-th sequence in the batch. The 2 is because the forward and
+            backward hidden states are concatenated. If
+            ``x[s,m] == 0.``, then ``h[s,m, :] == h_pad``
+        """
         # Recall:
         #   x is of size (S, M, I)
         #   F_lens is of size (M,)
