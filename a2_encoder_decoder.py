@@ -1,4 +1,4 @@
-'''
+"""
 This code is provided solely for the personal and private use of students
 taking the CSC401H/2511H course at the University of Toronto. Copying for
 purposes other than this use is expressly prohibited. All forms of
@@ -10,7 +10,7 @@ Authors: Sean Robertson, Jingcheng Niu, Zining Zhu, and Mohamed Abdall
 
 All of the files in this directory and all subdirectories are:
 Copyright (c) 2021 University of Toronto
-'''
+"""
 
 '''Concrete implementations of abstract base classes.
 
@@ -21,12 +21,12 @@ import torch
 
 from a2_abcs import EncoderBase, DecoderBase, EncoderDecoderBase
 
+
 # All docstrings are omitted in this file for simplicity. So please read
 # a2_abcs.py carefully so that you can have a solid understanding of the
 # structure of the assignment.
 
 class Encoder(EncoderBase):
-
 
     def init_submodules(self):
         # Hints:
@@ -73,7 +73,7 @@ class Encoder(EncoderBase):
 
 
 class DecoderWithoutAttention(DecoderBase):
-    '''A recurrent decoder without attention'''
+    """A recurrent decoder without attention"""
 
     def init_submodules(self):
         # Hints:
@@ -108,7 +108,6 @@ class DecoderWithoutAttention(DecoderBase):
         # 4. The output of an LSTM cell is a tuple (h, c), but a GRU cell or an
         #   RNN cell will only output h.
         assert False, "Fill me"
-
 
     def get_first_hidden_state(self, h, F_lens):
         # Recall:
@@ -152,10 +151,10 @@ class DecoderWithoutAttention(DecoderBase):
 
 
 class DecoderWithAttention(DecoderWithoutAttention):
-    '''A decoder, this time with attention
+    """A decoder, this time with attention
 
     Inherits from DecoderWithoutAttention to avoid repeated code.
-    '''
+    """
 
     def init_submodules(self):
         # Hints:
@@ -180,7 +179,7 @@ class DecoderWithAttention(DecoderWithoutAttention):
         assert False, "Fill me"
 
     def attend(self, htilde_t, h, F_lens):
-        '''The attention mechanism. Calculate the context vector c_t.
+        """The attention mechanism. Calculate the context vector c_t.
 
         Parameters
         ----------
@@ -205,7 +204,7 @@ class DecoderWithAttention(DecoderWithoutAttention):
             context vectorc_t is the product of weights alpha_t and h.
 
         Hint: Use get_attention_weights() to calculate alpha_t.
-        '''
+        """
         assert False, "Fill me"
 
     def get_attention_weights(self, htilde_t, h, F_lens):
@@ -228,6 +227,7 @@ class DecoderWithAttention(DecoderWithoutAttention):
         # Hint:
         # Relevant pytorch functions: torch.nn.functional.cosine_similarity
         assert False, "Fill me"
+
 
 class DecoderWithMultiHeadAttention(DecoderWithAttention):
 
@@ -265,6 +265,7 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         #   tensor([1,2,3,4]).repeat_interleave(2) will output
         #   tensor([1,1,2,2,3,3,4,4]), just like numpy.repeat.
         assert False, "Fill me"
+
 
 class EncoderDecoder(EncoderDecoderBase):
 

@@ -1,4 +1,4 @@
-'''
+"""
 This code is provided solely for the personal and private use of students
 taking the CSC401H/2511H course at the University of Toronto. Copying for
 purposes other than this use is expressly prohibited. All forms of
@@ -10,7 +10,7 @@ Authors: Sean Robertson, Jingcheng Niu, Zining Zhu, and Mohamed Abdall
 
 All of the files in this directory and all subdirectories are:
 Copyright (c) 2021 University of Toronto
-'''
+"""
 
 '''Calculate BLEU score for one reference and one hypothesis
 
@@ -21,7 +21,7 @@ from math import exp  # exp(x) gives e^x
 
 
 def grouper(seq, n):
-    '''Get all n-grams from a sequence
+    """Get all n-grams from a sequence
 
     An n-gram is a contiguous sub-sequence within `seq` of length `n`. This
     function extracts them (in order) from `seq`.
@@ -36,12 +36,17 @@ def grouper(seq, n):
     Returns
     -------
     ngrams : list
-    '''
-    assert False, "Fill me"
+    """
+    ngrams = []
+
+    for i in range(len(seq) - n + 1):
+        ngrams.append(seq[i:i + n])
+
+    return ngrams
 
 
 def n_gram_precision(reference, candidate, n):
-    '''Compute the precision for a given order of n-gram
+    """Compute the precision for a given order of n-gram
 
     Parameters
     ----------
@@ -58,12 +63,19 @@ def n_gram_precision(reference, candidate, n):
     p_n : float
         The n-gram precision. In the case that the candidate has length 0,
         `p_n` is 0.
-    '''
-    assert False, "Fill me"
+    """
+    total = len(grouper(candidate, n))
+    count = 0
+
+    for ngram in grouper(candidate, n):
+        if ngram in grouper(reference, n):
+            count += 1
+
+    return count / total
 
 
 def brevity_penalty(reference, candidate):
-    '''Calculate the brevity penalty between a reference and candidate
+    """Calculate the brevity penalty between a reference and candidate
 
     Parameters
     ----------
@@ -78,12 +90,19 @@ def brevity_penalty(reference, candidate):
     BP : float
         The brevity penalty. In the case that the candidate transcription is
         of 0 length, `BP` is 0.
-    '''
-    assert False, "Fill me"
+    """
+    c = len(candidate)
+    r = len(reference)
+    brevity = r / c if c != 0 else 0
+    if brevity == 0:
+        return 0
+    BP = 1 if brevity < 1 else exp(1 - brevity)
+
+    return BP
 
 
-def BLEU_score(reference, hypothesis, n):
-    '''Calculate the BLEU score
+def BLEU_score(reference, candidate, n):
+    """Calculate the BLEU score
 
     Parameters
     ----------
@@ -101,5 +120,14 @@ def BLEU_score(reference, hypothesis, n):
     -------
     bleu : float
         The BLEU score
-    '''
-    assert False, "Fill me"
+    """
+    bp = brevity_penalty(reference, candidate)
+    p = 1
+
+    for i in range(n):
+        p_i = n_gram_precision(reference, candidate, i + 1)
+        p *= p_i
+
+    bleu = bp * p ** (1 / n)
+
+    return bleu
