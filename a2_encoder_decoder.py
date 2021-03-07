@@ -77,6 +77,26 @@ class Encoder(EncoderBase):
         assert False, "Fill me"
 
     def get_all_rnn_inputs(self, F):
+        '''Get all input vectors to the RNN at once
+
+        Parameters
+        ----------
+        F : torch.LongTensor
+            An integer tensor of shape ``(S, M)``, where ``S`` is the number of
+            source time steps and ``M`` is the batch dimension. ``F[s, m]``
+            is the token id of the ``s``-th word in the ``m``-th source
+            sequence in the batch. ``F`` has been right-padded with
+            ``self.pad_id`` wherever ``S`` exceeds the length of the original
+            sequence.
+
+        Returns
+        -------
+        x : torch.FloatTensor
+            A float tensor of shape ``(S, M, I)`` of input to the encoder RNN,
+            where ``I`` corresponds to the size of the per-word input vector.
+            Whenever ``s`` exceeds the original length of ``F[s, m]`` (i.e.
+            when ``F[s, m] == self.pad_id``), ``x[s, m, :] == 0.``
+        '''
         # Recall:
         #   F is size (S, M)
         #   x (output) is size (S, M, I)
@@ -85,7 +105,7 @@ class Encoder(EncoderBase):
         return x
 
     def get_all_hidden_states(self, x, F_lens, h_pad):
-        """Get all encoder hidden states for from input sequences
+        '''Get all encoder hidden states for from input sequences
 
         Parameters
         ----------
@@ -112,7 +132,7 @@ class Encoder(EncoderBase):
             ``m``-th sequence in the batch. The 2 is because the forward and
             backward hidden states are concatenated. If
             ``x[s,m] == 0.``, then ``h[s,m, :] == h_pad``
-        """
+        '''
         # Recall:
         #   x is of size (S, M, I)
         #   F_lens is of size (M,)
@@ -122,8 +142,11 @@ class Encoder(EncoderBase):
         # Hint:
         #   relevant pytorch modules:
         #   torch.nn.utils.rnn.{pad_packed,pack_padded}_sequence
-        assert False, "Fill me"
+        x_packed = torch.nn.utils.rnn.pack_padded_sequence(x, F_lens)
+        h_packed, h_n = self.rnn(x_packed)
+        h, len_unpacked = torch.nn.utils.rnn.pad_packed_sequence(h_packed)
 
+        return h
 
 class DecoderWithoutAttention(DecoderBase):
     """A recurrent decoder without attention"""
@@ -253,7 +276,7 @@ class DecoderWithAttention(DecoderWithoutAttention):
         Returns
         -------
         c_t : torch.FloatTensor
-            A float tensor of size ``(M, self.target_vocab_size)``. The
+            A float tensor of size ``(M, self.hidden_state_size)``. The
             context vectorc_t is the product of weights alpha_t and h.
 
         Hint: Use get_attention_weights() to calculate alpha_t.
@@ -332,7 +355,7 @@ class EncoderDecoder(EncoderDecoderBase):
         #   self.source_vocab_size, self.source_pad_id,
         #   self.word_embedding_size, self.encoder_num_hidden_layers,
         #   self.encoder_hidden_size, self.encoder_dropout, self.cell_type,
-        #   self.target_vocab_size, self.target_eos
+        #   self.target_vocab_size, self.target_eos, self.heads
         # 4. Recall that self.target_eos doubles as the decoder pad id since we
         #   never need an embedding for it
         assert False, "Fill me"
