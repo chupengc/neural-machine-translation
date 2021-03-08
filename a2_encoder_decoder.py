@@ -156,45 +156,13 @@ class DecoderWithoutAttention(DecoderBase):
         #   is either initialized, or t > 1.
         # 4. The output of an LSTM cell is a tuple (h, c), but a GRU cell or an
         #   RNN cell will only output h.
-        assert False, "Fill me"
+        xtilde_t = self.get_current_rnn_input(E_tm1, htilde_tm1, h, F_lens)
+        htilde_t = self.get_current_hidden_state(xtilde_t, htilde_tm1)
+        logits_t = self.get_current_logits(htilde_t)
+
+        return logits_t, htilde_t
 
     def get_first_hidden_state(self, h, F_lens):
-        '''Get the initial decoder hidden state, prior to the first input
-
-        Parameters
-        ----------
-        h : torch.FloatTensor
-            A float tensor of shape ``(S, M, self.hidden_state_size)`` of
-            hidden states of the encoder. ``h[s, m, i]`` is the
-            ``i``-th index of the encoder RNN's last hidden state at time ``s``
-            of the ``m``-th sequence in the batch. The states of the
-            encoder have been right-padded such that
-            ``h[F_lens[m]:, m]`` should all be ignored.
-        F_lens : torch.LongTensor
-            An integer tensor of shape ``(M,)`` corresponding to the lengths
-            of the encoded source sentences.
-
-        Returns
-        -------
-        htilde_0 : torch.FloatTensor
-            A float tensor of shape ``(M, self.hidden_state_size)``, where
-            ``htilde_0[m, i]`` is the ``i``-th index of the decoder's first
-            (pre-sequence) hidden state for the ``m``-th sequence in the batch
-
-        Notes
-        -----
-        You will or will not need `h` and `F_lens`, depending on
-        whether this decoder uses attention.
-
-        `h` is the output of a bidirectional layer. Assume
-        ``h[..., :self.hidden_state_size // 2]`` correspond to the
-        hidden states in the forward direction and
-        ``h[..., self.hidden_state_size // 2:]`` to those in the
-        backward direction.
-
-        In the case of an LSTM, we will initialize the cell state with zeros
-        later on (don't worry about it).
-        '''
         # Recall:
         #   h is of size (S, M, 2 * H)
         #   F_lens is of size (M,)
@@ -221,31 +189,38 @@ class DecoderWithoutAttention(DecoderBase):
         # tensors of shape [m, hidden_size]
         forward_hidden = torch.cat(forward_extract, 0)
         backward_hidden = backward_direction[0]
-        htilde_tml = torch.cat((forward_hidden, backward_hidden), 1)
+        htilde_0 = torch.cat((forward_hidden, backward_hidden), 1)
 
-        return htilde_tml
+        return htilde_0
 
     def get_current_rnn_input(self, E_tm1, htilde_tm1, h, F_lens):
+
         # Recall:
         #   E_tm1 is of size (M,)
         #   htilde_tm1 is of size (M, 2 * H) or a tuple of two of those (LSTM)
         #   h is of size (S, M, 2 * H)
         #   F_lens is of size (M,)
         #   xtilde_t (output) is of size (M, Itilde)
-        assert False, "Fill me"
+        xtilde_t = self.embedding(E_tm1)
+
+        return xtilde_t
 
     def get_current_hidden_state(self, xtilde_t, htilde_tm1):
         # Recall:
         #   xtilde_t is of size (M, Itilde)
         #   htilde_tm1 is of size (M, 2 * H) or a tuple of two of those (LSTM)
         #   htilde_t (output) is of same size as htilde_tm1
-        assert False, "Fill me"
+        htilde_t = self.cell(xtilde_t, htilde_tm1)
+
+        return htilde_t
 
     def get_current_logits(self, htilde_t):
         # Recall:
         #   htilde_t is of size (M, 2 * H), even for LSTM (cell state discarded)
         #   logits_t (output) is of size (M, V)
-        assert False, "Fill me"
+        logits_t = self.ff(htilde_t)
+
+        return logits_t
 
 
 class DecoderWithAttention(DecoderWithoutAttention):
