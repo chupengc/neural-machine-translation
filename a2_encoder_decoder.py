@@ -74,29 +74,12 @@ class Encoder(EncoderBase):
         #   input seq -> |embedding| -> embedded seq -> |rnn| -> seq hidden
         # 2. You will need to use these methods:
         #   self.get_all_rnn_inputs, self.get_all_hidden_states
-        assert False, "Fill me"
+        x = self.get_all_rnn_inputs(F)
+        h = self.get_all_hidden_states(x, F_lens, h_pad)
+
+        return h
 
     def get_all_rnn_inputs(self, F):
-        '''Get all input vectors to the RNN at once
-
-        Parameters
-        ----------
-        F : torch.LongTensor
-            An integer tensor of shape ``(S, M)``, where ``S`` is the number of
-            source time steps and ``M`` is the batch dimension. ``F[s, m]``
-            is the token id of the ``s``-th word in the ``m``-th source
-            sequence in the batch. ``F`` has been right-padded with
-            ``self.pad_id`` wherever ``S`` exceeds the length of the original
-            sequence.
-
-        Returns
-        -------
-        x : torch.FloatTensor
-            A float tensor of shape ``(S, M, I)`` of input to the encoder RNN,
-            where ``I`` corresponds to the size of the per-word input vector.
-            Whenever ``s`` exceeds the original length of ``F[s, m]`` (i.e.
-            when ``F[s, m] == self.pad_id``), ``x[s, m, :] == 0.``
-        '''
         # Recall:
         #   F is size (S, M)
         #   x (output) is size (S, M, I)
@@ -105,34 +88,6 @@ class Encoder(EncoderBase):
         return x
 
     def get_all_hidden_states(self, x, F_lens, h_pad):
-        '''Get all encoder hidden states for from input sequences
-
-        Parameters
-        ----------
-        x : torch.FloatTensor
-            A float tensor of shape ``(S, M, I)`` of input to the encoder RNN,
-            where ``S`` is the number of source time steps, ``M`` is the batch
-            dimension, and ``I`` corresponds to the size of the per-word input
-            vector. ``x[s, m, :]`` is the input vector for the ``s``-th word in
-            the ``m``-th source sequence in the batch. `x` has been padded such
-            that ``x[F_lens[m]:, m, :] == 0.`` for all ``m``.
-        F_lens : torch.LongTensor
-            An integer tensor of shape ``(M,)`` that stores the original
-            lengths of each source sequence (and input sequence) in the batch
-            before right-padding.
-        h_pad : float
-            The value to right-pad `h` with, wherever `x` is right-padded.
-
-        Returns
-        -------
-        h : torch.FloatTensor
-            A float tensor of shape ``(S, M, 2 * self.hidden_state_size)``
-            where ``h[s,m,i]`` refers to the ``i``-th index of the encoder
-            RNN's last layer's hidden state at time step ``s`` of the
-            ``m``-th sequence in the batch. The 2 is because the forward and
-            backward hidden states are concatenated. If
-            ``x[s,m] == 0.``, then ``h[s,m, :] == h_pad``
-        '''
         # Recall:
         #   x is of size (S, M, I)
         #   F_lens is of size (M,)
@@ -148,6 +103,7 @@ class Encoder(EncoderBase):
 
         return h
 
+
 class DecoderWithoutAttention(DecoderBase):
     """A recurrent decoder without attention"""
 
@@ -161,7 +117,24 @@ class DecoderWithoutAttention(DecoderBase):
         # 3. cell_type will be one of: ['lstm', 'gru', 'rnn']
         # 4. Relevant pytorch modules:
         #   torch.nn.{Embedding, Linear, LSTMCell, RNNCell, GRUCell}
-        assert False, "Fill me"
+        if self.cell_type == "lstm":
+            self.cell = torch.nn.LSTMCell(self.word_embedding_size,
+                                          self.hidden_state_size)
+        elif self.cell_type == "gru":
+            self.cell = torch.nn.GRUCell(self.word_embedding_size,
+                                         self.hidden_state_size)
+        elif self.cell_type == "rnn":
+            self.cell = torch.nn.RNNCell(self.word_embedding_size,
+                                         self.hidden_state_size)
+        else:
+            raise NameError("cell_type not defined")
+
+        self.embedding = torch.nn.Embedding(self.target_vocab_size,
+                                            self.word_embedding_size,
+                                            padding_idx=self.pad_id)
+
+        self.ff = torch.nn.Linear(self.hidden_state_size,
+                                  self.target_vocab_size)
 
     def forward_pass(self, E_tm1, htilde_tm1, h, F_lens):
         # Recall:
@@ -186,6 +159,42 @@ class DecoderWithoutAttention(DecoderBase):
         assert False, "Fill me"
 
     def get_first_hidden_state(self, h, F_lens):
+        '''Get the initial decoder hidden state, prior to the first input
+
+        Parameters
+        ----------
+        h : torch.FloatTensor
+            A float tensor of shape ``(S, M, self.hidden_state_size)`` of
+            hidden states of the encoder. ``h[s, m, i]`` is the
+            ``i``-th index of the encoder RNN's last hidden state at time ``s``
+            of the ``m``-th sequence in the batch. The states of the
+            encoder have been right-padded such that
+            ``h[F_lens[m]:, m]`` should all be ignored.
+        F_lens : torch.LongTensor
+            An integer tensor of shape ``(M,)`` corresponding to the lengths
+            of the encoded source sentences.
+
+        Returns
+        -------
+        htilde_0 : torch.FloatTensor
+            A float tensor of shape ``(M, self.hidden_state_size)``, where
+            ``htilde_0[m, i]`` is the ``i``-th index of the decoder's first
+            (pre-sequence) hidden state for the ``m``-th sequence in the batch
+
+        Notes
+        -----
+        You will or will not need `h` and `F_lens`, depending on
+        whether this decoder uses attention.
+
+        `h` is the output of a bidirectional layer. Assume
+        ``h[..., :self.hidden_state_size // 2]`` correspond to the
+        hidden states in the forward direction and
+        ``h[..., self.hidden_state_size // 2:]`` to those in the
+        backward direction.
+
+        In the case of an LSTM, we will initialize the cell state with zeros
+        later on (don't worry about it).
+        '''
         # Recall:
         #   h is of size (S, M, 2 * H)
         #   F_lens is of size (M,)
@@ -201,7 +210,20 @@ class DecoderWithoutAttention(DecoderBase):
         #   with the hidden states of the encoder's backward direction at time
         #   t=0
         # 2. Relevant pytorch functions: torch.cat
-        assert False, "Fill me"
+        hidden_size = h.shape[2]
+        m = F_lens.shape[0]
+        forward_direction = h[:, :, 0:hidden_size]
+        backward_direction = h[:, :, hidden_size:]
+
+        forward_extract = \
+            [forward_direction[F_lens[i], i].reshape(1, hidden_size)
+             for i in range(m)]
+        # tensors of shape [m, hidden_size]
+        forward_hidden = torch.cat(forward_extract, 0)
+        backward_hidden = backward_direction[0]
+        htilde_tml = torch.cat((forward_hidden, backward_hidden), 1)
+
+        return htilde_tml
 
     def get_current_rnn_input(self, E_tm1, htilde_tm1, h, F_lens):
         # Recall:
