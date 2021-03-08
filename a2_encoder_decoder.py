@@ -241,15 +241,43 @@ class DecoderWithAttention(DecoderWithoutAttention):
         #   torch.nn.{Embedding, Linear, LSTMCell, RNNCell, GRUCell}
         # 5. The implementation of this function should be different from
         #   DecoderWithoutAttention.init_submodules.
-        assert False, "Fill me"
+        if self.cell_type == "lstm":
+            self.cell = torch.nn.LSTMCell(self.word_embedding_size +
+                                          self.hidden_state_size,
+                                          self.hidden_state_size)
+        elif self.cell_type == "gru":
+            self.cell = torch.nn.GRUCell(self.word_embedding_size +
+                                         self.hidden_state_size,
+                                         self.hidden_state_size)
+        elif self.cell_type == "rnn":
+            self.cell = torch.nn.RNNCell(self.word_embedding_size +
+                                         self.hidden_state_size,
+                                         self.hidden_state_size)
+        else:
+            raise NameError("cell_type not defined")
+
+        self.embedding = torch.nn.Embedding(self.target_vocab_size,
+                                            self.word_embedding_size,
+                                            padding_idx=self.pad_id)
+
+        self.ff = torch.nn.Linear(self.hidden_state_size,
+                                  self.target_vocab_size)
 
     def get_first_hidden_state(self, h, F_lens):
         # Hint: For this time, the hidden states should be initialized to zeros.
-        assert False, "Fill me"
+        hidden_size = h.shape[2]
+        m = h.shape[1]
+        htilde_0 = torch.zeros([m, hidden_size], dtype=torch.float)
+
+        return htilde_0
 
     def get_current_rnn_input(self, E_tm1, htilde_tm1, h, F_lens):
         # Hint: Use attend() for c_t
-        assert False, "Fill me"
+        embed_tm1 = self.embedding(E_tm1)  # (M, word_embedding_size)
+        c_tm1 = self.attend(htilde_tm1, h, F_lens)  # (M, hidden_state_size)
+        xtilde_t = torch.cat((embed_tm1, c_tm1), 1)
+
+        return xtilde_t
 
     def attend(self, htilde_t, h, F_lens):
         """The attention mechanism. Calculate the context vector c_t.
@@ -278,7 +306,13 @@ class DecoderWithAttention(DecoderWithoutAttention):
 
         Hint: Use get_attention_weights() to calculate alpha_t.
         """
-        assert False, "Fill me"
+        alpha_t = self.get_attention_weights(htilde_t, h, F_lens)
+        hidden_size = h.shape[2]
+        alpha_tile = alpha_t.repeat(1, 1, hidden_size)
+        c_t = alpha_tile * h
+        c_t = torch.sum(c_t, dim=0)
+
+        return c_t
 
     def get_attention_weights(self, htilde_t, h, F_lens):
         # DO NOT MODIFY! Calculates attention weights, ensuring padded terms
@@ -299,7 +333,11 @@ class DecoderWithAttention(DecoderWithoutAttention):
         #
         # Hint:
         # Relevant pytorch functions: torch.nn.functional.cosine_similarity
-        assert False, "Fill me"
+        s = h.shape[0]
+        htilde_tile = htilde_t.repeat(s, 1, 1)
+        e_t = torch.nn.functional.cosine_similarity(h, htilde_tile, 2)
+
+        return e_t
 
 
 class DecoderWithMultiHeadAttention(DecoderWithAttention):
