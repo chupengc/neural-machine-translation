@@ -133,6 +133,7 @@ class DecoderWithoutAttention(DecoderBase):
                                             self.word_embedding_size,
                                             padding_idx=self.pad_id)
 
+        # or self.hidden_state_size * 2 ???
         self.ff = torch.nn.Linear(self.hidden_state_size,
                                   self.target_vocab_size)
 
@@ -275,7 +276,7 @@ class DecoderWithAttention(DecoderWithoutAttention):
         # Hint: Use attend() for c_t
         embed_tm1 = self.embedding(E_tm1)  # (M, word_embedding_size)
         c_tm1 = self.attend(htilde_tm1, h, F_lens)  # (M, hidden_state_size)
-        xtilde_t = torch.cat((embed_tm1, c_tm1), 1)
+        xtilde_t = torch.cat([embed_tm1, c_tm1], 1)
 
         return xtilde_t
 
@@ -308,9 +309,11 @@ class DecoderWithAttention(DecoderWithoutAttention):
         """
         alpha_t = self.get_attention_weights(htilde_t, h, F_lens)
         hidden_size = h.shape[2]
-        alpha_tile = alpha_t.repeat(1, 1, hidden_size)
-        c_t = alpha_tile * h
-        c_t = torch.sum(c_t, dim=0)
+        # alpha_tile = alpha_t.repeat(1, 1, hidden_size)
+        alpha_tile = torch.cat([alpha_t.unsqueeze(2)
+                                for i in range(hidden_size)], dim=2)
+        c_s = alpha_tile * h
+        c_t = torch.sum(c_s, dim=0)
 
         return c_t
 
@@ -358,13 +361,44 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         #       self.W, self.Wtilde, self.Q
         # 3. You will need these object attributes:
         #       self.hidden_state_size
-        # 4. self.W, self.Wtilde, and self.Q should process all heads at once. They
-        #    should not be lists!
+        # 4. self.W, self.Wtilde, and self.Q should process all heads at once.
+        #    They should not be lists!
         # 5. Relevant pytorch module: torch.nn.Linear (note: set bias=False!)
         # 6. You do *NOT* need self.heads at this point
-        assert False, "Fill me"
+        self.W = torch.nn.Linear(self.hidden_state_size,
+                                 self.hidden_state_size, bias=False)
+        self.Wtilde = torch.nn.Linear(self.hidden_state_size,
+                                      self.hidden_state_size, bias=False)
+        self.Q = torch.nn.Linear(self.hidden_state_size,
+                                 self.hidden_state_size, bias=False)
 
     def attend(self, htilde_t, h, F_lens):
+        """The attention mechanism. Calculate the context vector c_t.
+
+        Parameters
+        ----------
+        htilde_t : torch.FloatTensor or tuple
+            Like `htilde_tm1` (either a float tensor or a pair of float
+            tensors), but matching the current hidden state.
+        h : torch.FloatTensor
+            A float tensor of size ``(S, M, self.hidden_state_size)`` of
+            hidden states of the encoder. ``h[s, m, i]`` is the
+            ``i``-th index of the encoder RNN's last hidden state at time ``s``
+            of the ``m``-th sequence in the batch. The states of the
+            encoder have been right-padded such that ``h[F_lens[m]:, m]``
+            should all be ignored.
+        F_lens : torch.LongTensor
+            An integer tensor of size ``(M,)`` corresponding to the lengths
+            of the encoded source sentences.
+
+        Returns
+        -------
+        c_t : torch.FloatTensor
+            A float tensor of size ``(M, self.hidden_state_size)``. The
+            context vectorc_t is the product of weights alpha_t and h.
+
+        Hint: Use get_attention_weights() to calculate alpha_t.
+        """
         # Hints:
         # 1. You can use super().attend to call for the regular attention
         #   function.
@@ -375,7 +409,10 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         #   tensor([1,2,3,4]).repeat(2) will output tensor([1,2,3,4,1,2,3,4]).
         #   tensor([1,2,3,4]).repeat_interleave(2) will output
         #   tensor([1,1,2,2,3,3,4,4]), just like numpy.repeat.
-        assert False, "Fill me"
+        htilde_t_n = self.Wtilde(htilde_t)
+        h_n = self.W(h)
+        c_t = super().attend(htilde_t_n, h_n, F_lens)
+        n = self.heads
 
 
 class EncoderDecoder(EncoderDecoderBase):
