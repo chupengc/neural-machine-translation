@@ -373,32 +373,6 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
                                  self.hidden_state_size, bias=False)
 
     def attend(self, htilde_t, h, F_lens):
-        """The attention mechanism. Calculate the context vector c_t.
-
-        Parameters
-        ----------
-        htilde_t : torch.FloatTensor or tuple
-            Like `htilde_tm1` (either a float tensor or a pair of float
-            tensors), but matching the current hidden state.
-        h : torch.FloatTensor
-            A float tensor of size ``(S, M, self.hidden_state_size)`` of
-            hidden states of the encoder. ``h[s, m, i]`` is the
-            ``i``-th index of the encoder RNN's last hidden state at time ``s``
-            of the ``m``-th sequence in the batch. The states of the
-            encoder have been right-padded such that ``h[F_lens[m]:, m]``
-            should all be ignored.
-        F_lens : torch.LongTensor
-            An integer tensor of size ``(M,)`` corresponding to the lengths
-            of the encoded source sentences.
-
-        Returns
-        -------
-        c_t : torch.FloatTensor
-            A float tensor of size ``(M, self.hidden_state_size)``. The
-            context vectorc_t is the product of weights alpha_t and h.
-
-        Hint: Use get_attention_weights() to calculate alpha_t.
-        """
         # Hints:
         # 1. You can use super().attend to call for the regular attention
         #   function.
@@ -416,9 +390,13 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         # combine c_t
         n = self.heads
         s, m, hidden_size = h.shape[0], h.shape[1], h.shape[2]
-        htilde_t_n = self.Wtilde(htilde_t).view(m, -1, n, hidden_size // n)
-        h_n = self.W(h).view(m, -1, n, hidden_size // n)
-        c_t = super().attend(htilde_t_n, h_n, F_lens)  # (M, hidden_state_size)
+        htilde_n = self.Wtilde(htilde_t).repeat_interleave(n).view(m, -1)
+        h_n = self.W(h).repeat_interleave(n).view(s, m, -1)
+        c_n = super().attend(htilde_n, h_n, F_lens)  # (M, N * hidden_size)
+        c_t = c_n.view(m, -1, n, 1)[:, :, 0, 0]  # (M, hidden_size)
+        c_cat = self.Q(c_t)
+
+        return c_cat
 
 
 class EncoderDecoder(EncoderDecoderBase):
