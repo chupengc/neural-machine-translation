@@ -268,7 +268,7 @@ class DecoderWithAttention(DecoderWithoutAttention):
         # Hint: For this time, the hidden states should be initialized to zeros.
         hidden_size = h.shape[2]
         m = h.shape[1]
-        htilde_0 = torch.zeros([m, hidden_size], dtype=torch.float)
+        htilde_0 = torch.zeros([m, hidden_size], device=h.device)
 
         return htilde_0
 
@@ -409,10 +409,16 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         #   tensor([1,2,3,4]).repeat(2) will output tensor([1,2,3,4,1,2,3,4]).
         #   tensor([1,2,3,4]).repeat_interleave(2) will output
         #   tensor([1,1,2,2,3,3,4,4]), just like numpy.repeat.
-        htilde_t_n = self.Wtilde(htilde_t)
-        h_n = self.W(h)
-        c_t = super().attend(htilde_t_n, h_n, F_lens)
+
+        # h: (S, M, hidden_size), htilde_t: (M, hidden_size)
+        # split by N heads
+        # call super().attend()
+        # combine c_t
         n = self.heads
+        s, m, hidden_size = h.shape[0], h.shape[1], h.shape[2]
+        htilde_t_n = self.Wtilde(htilde_t).view(m, -1, n, hidden_size // n)
+        h_n = self.W(h).view(m, -1, n, hidden_size // n)
+        c_t = super().attend(htilde_t_n, h_n, F_lens)  # (M, hidden_state_size)
 
 
 class EncoderDecoder(EncoderDecoderBase):
