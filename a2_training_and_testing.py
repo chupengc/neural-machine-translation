@@ -152,4 +152,14 @@ def compute_average_bleu_over_dataset(
         The total BLEU score summed over all sequences divided by the number of
         sequences
     '''
-    assert False, "Fill me"
+    total_bleu = 0
+    count = 0
+    for F, F_lens, E_ref in dataloader:
+        F, F_lens = F.to(device), F_lens.to(device)
+        b_1 = model(F, F_lens)
+        E_cand = b_1[:, :, 0]
+        total_bleu += compute_batch_total_bleu(E_ref, E_cand, target_sos,
+                                               target_eos)
+        count += F_lens.shape[0]
+
+    return total_bleu / count
