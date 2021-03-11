@@ -38,24 +38,17 @@ class Encoder(EncoderBase):
         #   self.hidden_state_size, self.num_hidden_layers.
         # 3. cell_type will be one of: ['lstm', 'gru', 'rnn']
         # 4. Relevant pytorch modules: torch.nn.{LSTM, GRU, RNN, Embedding}
+        args = [self.word_embedding_size, self.hidden_state_size]
+        kwargs = {'num_layers': self.num_hidden_layers,
+                  'dropout': self.dropout,
+                  'bidirectional': True}
+
         if self.cell_type == "lstm":
-            self.rnn = torch.nn.LSTM(self.source_vocab_size,
-                                     self.hidden_state_size,
-                                     num_layers=self.num_hidden_layers,
-                                     dropout=self.dropout,
-                                     bidirectional=True)
+            self.rnn = torch.nn.LSTM(*args, **kwargs)
         elif self.cell_type == "gru":
-            self.rnn = torch.nn.GRU(self.source_vocab_size,
-                                    self.hidden_state_size,
-                                    num_layers=self.num_hidden_layers,
-                                    dropout=self.dropout,
-                                    bidirectional=True)
+            self.rnn = torch.nn.GRU(*args, **kwargs)
         elif self.cell_type == "rnn":
-            self.rnn = torch.nn.RNN(self.source_vocab_size,
-                                    self.hidden_state_size,
-                                    num_layers=self.num_hidden_layers,
-                                    dropout=self.dropout,
-                                    bidirectional=True)
+            self.rnn = torch.nn.RNN(*args, **kwargs)
         else:
             raise NameError("cell_type not defined")
 
@@ -97,11 +90,20 @@ class Encoder(EncoderBase):
         # Hint:
         #   relevant pytorch modules:
         #   torch.nn.utils.rnn.{pad_packed,pack_padded}_sequence
-        x_packed = torch.nn.utils.rnn.pack_padded_sequence(x, F_lens)
-        h_packed, h_n = self.rnn(x_packed)
-        h, len_unpacked = torch.nn.utils.rnn.pad_packed_sequence(h_packed)
-
-        return h
+        # x_packed = torch.nn.utils.rnn.pack_padded_sequence(x, F_lens,
+        #                                                    enforce_sorted=False)
+        # # h_packed, h_n = self.rnn(x_packed)
+        # # h, len_unpacked = torch.nn.utils.rnn.pad_packed_sequence(h_packed)
+        # h_packed, _ = self.rnn.forward(x_packed)
+        # h, _ = torch.nn.utils.rnn.pad_packed_sequence(h_packed,
+        #                                               padding_value=h_pad)
+        # return h
+        x = torch.nn.utils.rnn.pack_padded_sequence(x, F_lens,
+                                                    enforce_sorted=False)
+        outputs, _ = self.rnn.forward(x)
+        outputs, _ = torch.nn.utils.rnn.pad_packed_sequence(outputs,
+                                                            padding_value=h_pad)
+        return outputs
 
 
 class DecoderWithoutAttention(DecoderBase):
@@ -181,8 +183,8 @@ class DecoderWithoutAttention(DecoderBase):
         # 2. Relevant pytorch functions: torch.cat
         hidden_size = h.shape[2]
         m = F_lens.shape[0]
-        forward_direction = h[:, :, 0:hidden_size]
-        backward_direction = h[:, :, hidden_size:]
+        forward_direction = h[:, :, 0:hidden_size // 2]
+        backward_direction = h[:, :, hidden_size // 2:]
 
         forward_extract = \
             [forward_direction[F_lens[i], i].reshape(1, hidden_size)
