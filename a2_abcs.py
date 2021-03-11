@@ -976,7 +976,7 @@ class EncoderDecoderBase(torch.nn.Module, metaclass=abc.ABCMeta):
             remaining paths after the update. `b_t_1` is a long tensor of shape
             ``(t + 1, M, self.beam_width)`` which provides the token sequences
             of the remaining paths after the update. `logpb_t` is a float
-            tensor of the same shape as `logpb_t`, indicating the
+            tensor of the same shape as `logpb_tm1`, indicating the
             log-probabilities of the remaining paths in the beam after the
             update. Paths within a beam are ordered in decreasing log
             probability:

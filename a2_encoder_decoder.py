@@ -455,6 +455,66 @@ class EncoderDecoder(EncoderDecoderBase):
         return logits
 
     def update_beam(self, htilde_t, b_tm1_1, logpb_tm1, logpy_t):
+        """Update the beam in a beam search for the current time step
+
+        Parameters
+        ----------
+        htilde_t : torch.FloatTensor
+            A float tensor of shape
+            ``(M, self.beam_with, 2 * self.encoder_hidden_size)`` where
+            ``htilde_t[m, k, :]`` is the hidden state vector of the ``k``-th
+            path in the beam search for batch element ``m`` for the current
+            time step. ``htilde_t[m, k, :]`` was used to calculate
+            ``logpy_t[m, k, :]``.
+        b_tm1_1 : torch.LongTensor
+            A long tensor of shape ``(t, M, self.beam_width)`` where
+            ``b_tm1_1[t', m, k]`` is the ``t'``-th target token of the
+            ``k``-th path of the search for the ``m``-th element in the batch
+            up to the previous time step (including the start-of-sequence).
+        logpb_tm1 : torch.FloatTensor
+            A float tensor of shape ``(M, self.beam_width)`` where
+            ``logpb_tm1[m, k]`` is the log-probability of the ``k``-th path
+            of the search for the ``m``-th element in the batch up to the
+            previous time step. Log-probabilities are sorted such that
+            ``logpb_tm1[m, k] >= logpb_tm1[m, k']`` when ``k <= k'``.
+        logpy_t : torch.FloatTensor
+            A float tensor of shape
+            ``(M, self.beam_width, self.target_vocab_size)`` where
+            ``logpy_t[m, k, v]`` is the (normalized) conditional
+            log-probability of the word ``v`` extending the ``k``-th path in
+            the beam search for batch element ``m``. `logpy_t` has been
+            modified to account for finished paths (i.e. if ``(m, k)``
+            indexes a finished path,
+            ``logpy_t[m, k, v] = 0. if v == self.eos else -inf``)
+
+        Returns
+        -------
+        b_t_0, b_t_1, logpb_t : torch.FloatTensor, torch.LongTensor
+            `b_t_0` is a float tensor of shape ``(M, self.beam_width,
+            2 * self.encoder_hidden_size)`` of the hidden states of the
+            remaining paths after the update. `b_t_1` is a long tensor of shape
+            ``(t + 1, M, self.beam_width)`` which provides the token sequences
+            of the remaining paths after the update. `logpb_t` is a float
+            tensor of the same shape as `logpb_t`, indicating the
+            log-probabilities of the remaining paths in the beam after the
+            update. Paths within a beam are ordered in decreasing log
+            probability:
+            ``logpb_t[m, k] >= logpb_t[m, k']`` implies ``k <= k'``
+
+        Notes
+        -----
+        While ``logpb_tm1[m, k]``, ``htilde_t[m, k]``, and ``b_tm1_1[:, m, k]``
+        refer to the same path within a beam and so do ``logpb_t[m, k]``,
+        ``b_t_0[m, k]``, and ``b_t_1[:, m, k]``,
+        it is not necessarily the case that ``logpb_tm1[m, k]`` extends the
+        path ``logpb_t[m, k]`` (nor ``b_t_1[:, m, k]`` the path
+        ``b_tm1_1[:, m, k]``). This is because candidate paths are re-ranked in
+        the update by log-probability. It may be the case that all extensions
+        to ``logpb_tm1[m, k]`` are pruned in the update.
+
+        ``b_t_0`` extracts the hidden states from ``htilde_t`` that remain
+        after the update.
+        """
         # perform the operations within the psuedo-code's loop in the
         # assignment.
         # You do not need to worry about which paths have finished, but DO NOT
@@ -474,4 +534,18 @@ class EncoderDecoder(EncoderDecoderBase):
         #   torch.{flatten, topk, unsqueeze, expand_as, gather, cat}
         # 2. If you flatten a two-dimensional array of size z of (A, B),
         #   then the element z[a, b] maps to z'[a*B + b]
-        assert False, "Fill me"
+        K = self.beam_width
+        V = logpy_t.shape[2]
+        extensions_t = logpb_tm1.unsqueeze(-1) + logpy_t  # (M, K, V)
+        extensions_t = torch.flatten(extensions_t, 1)  # (M, K * V)
+        logpb_t, v = torch.topk(extensions_t, K, dim=1)  # (M, K)
+        path = (v // V).unsqueeze(-1)  # (M, K) -> (M, K, 1)
+        v = v.unsqueeze(0)  # (M, K) -> (1, M, K)
+        b_t_1 = torch.cat([b_tm1_1, v], dim=0)  # (t + 1, M, K)
+        if self.cell_type == "lstm":
+            b_t_0 = (torch.gather(htilde_t[0], 1, path.expand_as(htilde_t[0])),
+                     torch.gather(htilde_t[1], 1, path.expand_as(htilde_t[1])))
+        else:
+            b_t_0 = torch.gather(htilde_t, 1, path.expand_as(htilde_t))
+
+        return b_t_0, b_t_1, logpb_t
