@@ -64,7 +64,7 @@ def train_for_epoch(model, dataloader, optimizer, device):
     Returns
     -------
     avg_loss : float
-        The total loss divided by the total numer of sequence
+        The total loss divided by the total number of sequence
     '''
     # If you want, instead of looping through your dataloader as
     # for ... in dataloader: ...
@@ -77,7 +77,27 @@ def train_for_epoch(model, dataloader, optimizer, device):
     # If you are running into CUDA memory errors part way through training,
     # try "del F, F_lens, E, logits, loss" at the end of each iteration of
     # the loop.
-    assert False, "Fill me"
+    padding_id = model.source_pad_id
+    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=padding_id)
+    total_loss = 0
+    count = 0
+
+    for F, F_lens, E in dataloader:
+        F, F_lens, E = F.to(device), F_lens.to(device), E.to(device)
+        optimizer.zero_grad()
+        logits = model(F, F_lens, E)
+        pad_mask = model.get_target_padding_mask(E)
+        E = E.masked_fill(pad_mask, padding_id)
+        logits = torch.flatten(logits, end_dim=-2)
+        E = torch.flatten(E[1:])
+        loss = loss_fn(logits, E)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+        count += 1
+        del F, F_lens, E, logits, loss
+
+    return total_loss / count
 
 
 def compute_batch_total_bleu(E_ref, E_cand, target_sos, target_eos):
@@ -154,6 +174,7 @@ def compute_average_bleu_over_dataset(
     '''
     total_bleu = 0
     count = 0
+
     for F, F_lens, E_ref in dataloader:
         F, F_lens = F.to(device), F_lens.to(device)
         b_1 = model(F, F_lens)
