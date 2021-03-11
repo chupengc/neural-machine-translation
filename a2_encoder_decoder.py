@@ -478,10 +478,14 @@ class EncoderDecoder(EncoderDecoderBase):
         V = logpy_t.shape[2]
         extensions_t = logpb_tm1.unsqueeze(-1) + logpy_t  # (M, K, V)
         extensions_t = torch.flatten(extensions_t, 1)  # (M, K * V)
+
         logpb_t, v = torch.topk(extensions_t, K, dim=1)  # (M, K)
         path = (v // V).unsqueeze(-1)  # (M, K) -> (M, K, 1)
-        v = v.unsqueeze(0)  # (M, K) -> (1, M, K)
+        v = (v % V).unsqueeze(0)  # (M, K) -> (1, M, K)
+        b_tm1_1 = torch.gather(b_tm1_1, 2,
+                               path.squeeze(-1).unsqueeze(0).expand_as(b_tm1_1))
         b_t_1 = torch.cat([b_tm1_1, v], dim=0)  # (t + 1, M, K)
+
         if self.cell_type == "lstm":
             b_t_0 = (torch.gather(htilde_t[0], 1, path.expand_as(htilde_t[0])),
                      torch.gather(htilde_t[1], 1, path.expand_as(htilde_t[1])))
