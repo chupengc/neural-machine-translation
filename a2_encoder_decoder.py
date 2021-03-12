@@ -284,7 +284,8 @@ class DecoderWithAttention(DecoderWithoutAttention):
 
     def get_current_rnn_input(self, E_tm1, htilde_tm1, h, F_lens):
         # Hint: Use attend() for c_t
-        embed_tm1 = self.embedding(E_tm1)  # (M, word_embedding_size)
+        device = h.device
+        embed_tm1 = self.embedding(E_tm1).to(device)  # (M, word_embedding_size)
         if self.cell_type == "lstm":
             c_tm1 = self.attend(htilde_tm1[0], h, F_lens)
         else:
