@@ -285,7 +285,10 @@ class DecoderWithAttention(DecoderWithoutAttention):
     def get_current_rnn_input(self, E_tm1, htilde_tm1, h, F_lens):
         # Hint: Use attend() for c_t
         embed_tm1 = self.embedding(E_tm1)  # (M, word_embedding_size)
-        c_tm1 = self.attend(htilde_tm1, h, F_lens)  # (M, hidden_state_size)
+        if self.cell_type == "lstm":
+            c_tm1 = self.attend(htilde_tm1[0], h, F_lens)
+        else:
+            c_tm1 = self.attend(htilde_tm1, h, F_lens)  # (M, hidden_state_size)
         xtilde_t = torch.cat([embed_tm1, c_tm1], 1)
 
         return xtilde_t
@@ -400,7 +403,7 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         # combine c_t
         n = self.heads
         s, m, hidden_size = h.shape[0], h.shape[1], h.shape[2]
-        htilde_n = self.Wtilde(htilde_t).repeat_interleave(n).view(m, -1)
+        htilde_n = torch.repeat_interleave(self.Wtilde(htilde_t), n).view(m, -1)
         h_n = self.W(h).repeat_interleave(n).view(s, m, -1)
         c_n = super().attend(htilde_n, h_n, F_lens)  # (M, N * hidden_size)
         c_t = c_n.view(m, -1, n, 1)[:, :, 0, 0]  # (M, hidden_size)
@@ -433,7 +436,7 @@ class EncoderDecoder(EncoderDecoderBase):
         self.decoder = decoder_class(self.target_vocab_size, self.target_eos,
                                      self.word_embedding_size,
                                      self.encoder_hidden_size * 2,
-                                     self.cell_type)
+                                     self.cell_type, self.heads)
         self.decoder.init_submodules()
 
     def get_logits_for_teacher_forcing(self, h, F_lens, E):
