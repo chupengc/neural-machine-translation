@@ -67,6 +67,9 @@ def n_gram_precision(reference, candidate, n):
     total = len(grouper(candidate, n))
     count = 0
 
+    if len(candidate) == 0 or total == 0:
+        return 0
+
     for ngram in grouper(candidate, n):
         if ngram in grouper(reference, n):
             count += 1
@@ -93,9 +96,11 @@ def brevity_penalty(reference, candidate):
     """
     c = len(candidate)
     r = len(reference)
-    brevity = r / c if c != 0 else 0
-    if brevity == 0:
+
+    if c == 0:
         return 0
+
+    brevity = r / c
     BP = 1 if brevity < 1 else exp(1 - brevity)
 
     return BP
