@@ -67,7 +67,7 @@ def n_gram_precision(reference, candidate, n):
     total = len(grouper(candidate, n))
     count = 0
 
-    if len(candidate) == 0 or total == 0:
+    if len(candidate) == 0 or len(candidate) < n:
         return 0
 
     for ngram in grouper(candidate, n):

@@ -20,7 +20,6 @@ You don't need anything more than what's been imported here.
 import torch
 import a2_bleu_score
 
-
 from tqdm import tqdm
 
 
@@ -78,6 +77,7 @@ def train_for_epoch(model, dataloader, optimizer, device):
     # try "del F, F_lens, E, logits, loss" at the end of each iteration of
     # the loop.
     padding_id = model.source_pad_id
+    # ignore padding id in loss function
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=padding_id)
     total_loss = 0
     count = 0
@@ -86,6 +86,10 @@ def train_for_epoch(model, dataloader, optimizer, device):
         F, F_lens, E = F.to(device), F_lens.to(device), E.to(device)
         optimizer.zero_grad()
         logits = model(F, F_lens, E)
+
+        # pred = torch.argmax(logits, dim=2)
+        # print("pred = {}".format(pred), sep='\n')
+
         pad_mask = model.get_target_padding_mask(E)
         E = E.masked_fill(pad_mask, padding_id)
         logits = torch.flatten(logits, end_dim=-2)
@@ -95,6 +99,9 @@ def train_for_epoch(model, dataloader, optimizer, device):
         optimizer.step()
         total_loss += loss.item()
         count += 1
+
+        # print("E = {}".format(E), sep='\n')
+
         del F, F_lens, E, logits, loss
 
     return total_loss / count

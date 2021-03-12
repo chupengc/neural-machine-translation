@@ -207,7 +207,8 @@ class DecoderWithoutAttention(DecoderBase):
         #   h is of size (S, M, 2 * H)
         #   F_lens is of size (M,)
         #   xtilde_t (output) is of size (M, Itilde)
-        xtilde_t = self.embedding(E_tm1)
+        device = h.device
+        xtilde_t = self.embedding(E_tm1).to(device)
 
         return xtilde_t
 
@@ -402,13 +403,15 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         # split by N heads
         # call super().attend()
         # combine c_t
+        device = h.device
         n = self.heads
         s, m, hidden_size = h.shape[0], h.shape[1], h.shape[2]
-        htilde_n = torch.repeat_interleave(self.Wtilde(htilde_t), n).view(m, -1)
-        h_n = self.W(h).repeat_interleave(n).view(s, m, -1)
+        htilde_n = torch.repeat_interleave(self.Wtilde(htilde_t), n).view(m, -1)\
+            .to(device)
+        h_n = self.W(h).repeat_interleave(n).view(s, m, -1).to(device)
         c_n = super().attend(htilde_n, h_n, F_lens)  # (M, N * hidden_size)
         c_t = c_n.view(m, -1, n, 1)[:, :, 0, 0]  # (M, hidden_size)
-        c_combine = self.Q(c_t)
+        c_combine = self.Q(c_t).to(device)
 
         return c_combine
 
@@ -464,7 +467,7 @@ class EncoderDecoder(EncoderDecoderBase):
                 self.decoder.forward(E[i], htilde_tml, h, F_lens)
             logits.append(logits_t)
 
-        logits = torch.stack(logits[1:], dim=0)  # (T - 1, M, V)
+        logits = torch.stack(logits[:-1], dim=0)  # (T - 1, M, V)
 
         return logits
 
