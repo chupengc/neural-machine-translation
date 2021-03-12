@@ -135,7 +135,6 @@ class DecoderWithoutAttention(DecoderBase):
                                             self.word_embedding_size,
                                             padding_idx=self.pad_id)
 
-        # or self.hidden_state_size * 2 ???
         self.ff = torch.nn.Linear(self.hidden_state_size,
                                   self.target_vocab_size)
 
@@ -161,7 +160,10 @@ class DecoderWithoutAttention(DecoderBase):
         #   RNN cell will only output h.
         xtilde_t = self.get_current_rnn_input(E_tm1, htilde_tm1, h, F_lens)
         htilde_t = self.get_current_hidden_state(xtilde_t, htilde_tm1)
-        logits_t = self.get_current_logits(htilde_t)
+        if self.cell_type == "lstm":
+            logits_t = self.get_current_logits(htilde_t[0])
+        else:
+            logits_t = self.get_current_logits(htilde_t)
 
         return logits_t, htilde_t
 
@@ -181,23 +183,24 @@ class DecoderWithoutAttention(DecoderBase):
         #   with the hidden states of the encoder's backward direction at time
         #   t=0
         # 2. Relevant pytorch functions: torch.cat
-        hidden_size = h.shape[2]
-        m = F_lens.shape[0]
-        forward_direction = h[:, :, 0:hidden_size // 2]
+
+        # h (15, 128, 1024), F_lens (128, )
+        hidden_size = h.shape[2]  # 1024
+        m = F_lens.shape[0]  # 128
+        forward_direction = h[:, :, :hidden_size // 2]
         backward_direction = h[:, :, hidden_size // 2:]
 
-        forward_extract = \
-            [forward_direction[F_lens[i], i].reshape(1, hidden_size)
-             for i in range(m)]
+        time = [i for i in range(m)]
+        index = F_lens - 1
         # tensors of shape [m, hidden_size]
-        forward_hidden = torch.cat(forward_extract, 0)
+        forward_hidden = forward_direction[index, time]
         backward_hidden = backward_direction[0]
+
         htilde_0 = torch.cat((forward_hidden, backward_hidden), 1)
 
         return htilde_0
 
     def get_current_rnn_input(self, E_tm1, htilde_tm1, h, F_lens):
-
         # Recall:
         #   E_tm1 is of size (M,)
         #   htilde_tm1 is of size (M, 2 * H) or a tuple of two of those (LSTM)
@@ -213,7 +216,12 @@ class DecoderWithoutAttention(DecoderBase):
         #   xtilde_t is of size (M, Itilde)
         #   htilde_tm1 is of size (M, 2 * H) or a tuple of two of those (LSTM)
         #   htilde_t (output) is of same size as htilde_tm1
-        htilde_t = self.cell(xtilde_t, htilde_tm1)
+        h = self.hidden_state_size
+        if self.cell_type == "lstm":
+            htilde_tm1 = (htilde_tm1[0][:, :h], htilde_tm1[1][:, :h])
+            htilde_t = self.cell(xtilde_t, htilde_tm1)  # ((M, 2H), (M, 2H))
+        else:
+            htilde_t = self.cell(xtilde_t, htilde_tm1[:, :h])  # (M, 2H)
 
         return htilde_t
 
@@ -221,7 +229,7 @@ class DecoderWithoutAttention(DecoderBase):
         # Recall:
         #   htilde_t is of size (M, 2 * H), even for LSTM (cell state discarded)
         #   logits_t (output) is of size (M, V)
-        logits_t = self.ff(htilde_t)
+        logits_t = self.ff.forward(htilde_t)
 
         return logits_t
 
@@ -449,7 +457,7 @@ class EncoderDecoder(EncoderDecoderBase):
 
         for i in range(E.shape[0]):
             logits_t, htilde_tm1 = \
-                self.decoder.forward_pass(E[i], htilde_tml, h, F_lens)
+                self.decoder.forward(E[i], htilde_tml, h, F_lens)
             logits.append(logits_t)
 
         logits = torch.stack(logits[1:], dim=0)  # (T - 1, M, V)
