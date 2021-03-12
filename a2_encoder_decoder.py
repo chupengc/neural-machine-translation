@@ -409,7 +409,7 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         htilde_n = torch.repeat_interleave(self.Wtilde(htilde_t), n).view(m, -1)\
             .to(device)
         h_n = self.W(h).repeat_interleave(n).view(s, m, -1).to(device)
-        c_n = super().attend(htilde_n, h_n, F_lens)  # (M, N * hidden_size)
+        c_n = super().attend(htilde_n, h_n, F_lens).to(device)  # (M, N * hidden_size)
         c_t = c_n.view(m, -1, n, 1)[:, :, 0, 0]  # (M, hidden_size)
         c_combine = self.Q(c_t).to(device)
 
